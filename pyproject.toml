@@ -1,0 +1,97 @@
+[build-system]
+requires = ["hatchling>=1.27", "hatch-vcs>=0.5"]
+build-backend = "hatchling.build"
+
+[project]
+name = "qutop"
+dynamic = ["version"]
+description = "A terminal dashboard for quantum hardware: backend status, queues, qubit calibration and drift."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "Hasarindu Perera (Manin Research)" }]
+maintainers = [{ name = "Hasarindu Perera" }]
+requires-python = ">=3.11"
+keywords = ["quantum", "qiskit", "ibm-quantum", "tui", "calibration", "monitoring"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Science/Research",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: System :: Monitoring",
+    "Typing :: Typed",
+]
+dependencies = [
+    "qiskit-ibm-runtime>=0.40",
+]
+
+[project.urls]
+Source = "https://github.com/maninresearch/qutop"
+Issues = "https://github.com/maninresearch/qutop/issues"
+Changelog = "https://github.com/maninresearch/qutop/blob/main/CHANGELOG.md"
+
+[project.scripts]
+qutop = "qutop.cli:main"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.18",
+    "pytest>=8.4",
+    "pytest-cov>=7.0",
+    "ruff>=0.14",
+]
+
+[tool.hatch.version]
+source = "vcs"
+# PyPI rejects local version labels (+g1a2b3c), so dev builds from main
+# must not carry one.
+raw-options = { local_scheme = "no-local-version" }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/qutop"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/qutop", "tests", "CHANGELOG.md", "NOTICE"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "SIM", "RUF", "PT", "TID"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["qiskit.*", "qiskit_ibm_runtime.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["qutop.ui.*"]
+strict = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-markers", "--strict-config"]
+xfail_strict = true
+
+[tool.coverage.run]
+source = ["qutop"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
