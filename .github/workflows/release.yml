@@ -118,8 +118,17 @@ jobs:
             echo "CHANGELOG.md has no section for $VERSION" >&2
             exit 1
           fi
-      - name: Create the GitHub Release
+      # The release may already exist if the tag was made with GitHub's
+      # "Create a new release" page; then fill it in instead of failing.
+      - name: Create or update the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
-        run: gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --title "$TAG" --notes-file notes.md --verify-tag
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG" --notes-file notes.md
+            gh release upload "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --title "$TAG" \
+              --notes-file notes.md --verify-tag
+          fi

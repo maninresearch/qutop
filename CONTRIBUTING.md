@@ -42,8 +42,11 @@ To release a version:
 
 1. Rename `[Unreleased]` in `CHANGELOG.md` to `[X.Y.Z] - YYYY-MM-DD` and add
    a new empty `[Unreleased]` above it.
-2. Commit as `release: vX.Y.Z` and push to `main`.
-3. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+2. Commit as `release: vX.Y.Z` and merge it to `main`.
+3. Create the tag `vX.Y.Z` on `main`, either with
+   `git tag -a vX.Y.Z -m "qutop X.Y.Z" && git push origin vX.Y.Z`, or on
+   GitHub under Releases, "Draft a new release": type `vX.Y.Z` as a new tag
+   on `main`, leave the description empty and publish.
 
 The tag publishes to PyPI (after approval in the `pypi` environment) and
 creates a GitHub Release with that changelog section as its notes. The
