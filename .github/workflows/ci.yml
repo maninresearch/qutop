@@ -1,17 +1,14 @@
 name: ci
 
+# Pushes to main and tags run this through release.yml, which publishes
+# only if every job here passes.
 on:
-  push:
-    branches: [main]
   pull_request:
+  workflow_call:
   workflow_dispatch:
 
 permissions:
   contents: read
-
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   lint:
