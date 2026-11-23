@@ -112,7 +112,8 @@ jobs:
             $0 ~ "^## \\[" v "\\]" { found = 1; next }
             found && /^## \[/ { exit }
             found && /^\[[^]]+\]: / { exit }
-            found { print }
+            found && !started && /^[[:space:]]*$/ { next }
+            found { started = 1; print }
           ' CHANGELOG.md > notes.md
           if ! grep -q '[^[:space:]]' notes.md; then
             echo "CHANGELOG.md has no section for $VERSION" >&2
