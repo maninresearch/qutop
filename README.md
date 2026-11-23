@@ -24,7 +24,14 @@ qutop reads the IBM Quantum account you saved with Qiskit:
 
 Then:
 
-    qutop list
+    qutop list        # backends, queues, median errors
+    qutop collect     # record history until stopped
+
+`qutop collect` checks status every minute and calibration every 30 minutes,
+and stores a calibration only when IBM publishes a new one. History goes to
+`~/.local/share/qutop/history.sqlite3` (or `$XDG_DATA_HOME/qutop/`). Use
+`qutop collect --once` from cron or a systemd timer instead of leaving it
+running.
 
 Reading backend status and calibration data uses no QPU time.
 
