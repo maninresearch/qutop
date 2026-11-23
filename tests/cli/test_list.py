@@ -1,6 +1,7 @@
 import io
 import json
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 
@@ -96,3 +97,14 @@ def test_bad_command_exits_2() -> None:
     with pytest.raises(SystemExit) as exc:
         main(["nope"])
     assert exc.value.code == 2
+
+
+def test_account_option(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    saved = tmp_path / ".qiskit" / "qiskit-ibm.json"
+    saved.parent.mkdir()
+    saved.write_text('{"default": {"channel": "ibm_quantum_platform", "token": "k"}}')
+    monkeypatch.setattr("qutop.providers.ibm_account.DEFAULT_ACCOUNT_FILE", saved)
+    err = io.StringIO()
+    code = main(["--account", "work", "list"], out=io.StringIO(), err=err)
+    assert code == EXIT_NOT_CONFIGURED
+    assert "no saved IBM Quantum account named 'work'" in err.getvalue()

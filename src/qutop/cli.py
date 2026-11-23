@@ -37,6 +37,11 @@ def build_parser() -> argparse.ArgumentParser:
         description="Terminal dashboard for quantum hardware.",
     )
     parser.add_argument("--version", action="version", version=f"qutop {__version__}")
+    parser.add_argument(
+        "--account",
+        metavar="NAME",
+        help="saved IBM Quantum account to use (default: the account Qiskit would use)",
+    )
     commands = parser.add_subparsers(dest="command", metavar="COMMAND")
 
     list_cmd = commands.add_parser(
@@ -114,7 +119,7 @@ def main(
     if provider is None:
         from qutop.providers.ibm import IBMProvider
 
-        provider = IBMProvider()
+        provider = IBMProvider(account_name=args.account)
 
     if args.command == "collect":
         return _collect(args, provider, err)

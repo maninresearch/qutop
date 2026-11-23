@@ -1,38 +1,45 @@
-"""IBM Quantum, through the official ``qiskit-ibm-runtime`` client.
+"""IBM Quantum, through its REST API, using only the standard library.
 
-Credentials come from the account saved with
-``QiskitRuntimeService.save_account()``; qutop never reads or stores tokens
-itself. Nothing here submits jobs or uses QPU time.
+Endpoints and headers follow IBM's Qiskit Runtime REST API as used by the
+official ``qiskit-ibm-runtime`` client. Nothing here submits jobs or uses
+QPU time: qutop only reads the backend list and backend properties.
 
-Calibration is parsed from the JSON form of IBM's backend properties (the
-shape the REST API returns and ``BackendProperties.to_dict()`` produces),
-so parsing does not depend on Qiskit's object model.
+Calibration is parsed from the JSON form of IBM's backend properties, the
+shape ``GET /backends/{name}/properties`` returns.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from datetime import UTC, datetime
 from statistics import median
-from typing import Any, TypeVar
+from typing import Any
+from urllib.parse import quote
 
 from qutop.providers.base import (
     BackendStatus,
     BackendSummary,
     Calibration,
     EdgeCalibration,
-    NotConfiguredError,
     ProviderError,
     QubitCalibration,
     Status,
 )
+from qutop.providers.http import Http, HttpError
+from qutop.providers.ibm_account import (
+    Account,
+    IAMToken,
+    api_base,
+    load_account,
+    resolve_instances,
+)
+
+# Pins the API behaviour qutop was written against.
+API_VERSION = "2026-04-15"
 
 # Native two-qubit gates, in order of preference. Backends can also report
 # other two-qubit gates (for example ``rzz`` with fractional gates enabled);
 # those are not what most circuits are compiled to, so they are left out.
 NATIVE_2Q_GATES = ("cz", "ecr", "cx")
-
-T = TypeVar("T")
 
 _TO_MICROSECONDS = {"s": 1e6, "ms": 1e3, "us": 1.0, "µs": 1.0, "ns": 1e-3}
 
@@ -41,87 +48,133 @@ class IBMProvider:
     key = "ibm"
     name = "IBM Quantum"
 
-    def __init__(self, service: Any | None = None) -> None:
-        self._service = service
+    def __init__(
+        self,
+        account: Account | None = None,
+        http: Http | None = None,
+        account_name: str | None = None,
+    ) -> None:
+        self._account = account
+        self._account_name = account_name
+        self._http = http or Http()
+        self._token: IAMToken | None = None
+        self._instances: list[str] | None = None
+        self._backend_instance: dict[str, str] = {}
+        self._num_qubits: dict[str, int] = {}
 
-    def _get_service(self) -> Any:
-        if self._service is None:
-            # Imported here: qiskit takes seconds to import, and commands
-            # that never touch IBM should not pay for it.
-            from qiskit_ibm_runtime import QiskitRuntimeService
-            from qiskit_ibm_runtime.accounts import AccountNotFoundError
+    def _auth(self) -> tuple[Account, IAMToken]:
+        if self._account is None:
+            self._account = load_account(name=self._account_name)
+        if self._token is None:
+            self._token = IAMToken(self._account, self._http)
+        return self._account, self._token
 
+    def _get(self, crn: str, path: str) -> Any:
+        account, token = self._auth()
+        url = f"{api_base(account, crn)}{path}"
+        for attempt in range(2):
+            headers = {
+                "Authorization": f"Bearer {token.get()}",
+                "Service-CRN": crn,
+                "IBM-API-Version": API_VERSION,
+            }
             try:
-                self._service = QiskitRuntimeService()
-            except AccountNotFoundError as exc:
-                raise NotConfiguredError(
-                    "no saved IBM Quantum account; save one with "
-                    "QiskitRuntimeService.save_account(token=..., set_as_default=True)"
-                ) from exc
-            except Exception as exc:
-                raise ProviderError(f"could not connect to IBM Quantum: {exc}") from exc
-        return self._service
+                return self._http.request_json("GET", url, headers=headers)
+            except HttpError as exc:
+                if exc.status == 401 and attempt == 0:  # token revoked or expired early
+                    token.invalidate()
+                    continue
+                raise
+        raise AssertionError("unreachable")  # pragma: no cover
 
-    def _call(self, what: str, fn: Callable[[], T]) -> T:
-        try:
-            return fn()
-        except ProviderError:
-            raise
-        except Exception as exc:
-            raise ProviderError(f"IBM Quantum {what} failed: {exc}") from exc
-
-    def backends(self) -> list[BackendSummary]:
-        service = self._get_service()
-        return self._call("request", lambda: [summarize(b) for b in service.backends()])
+    def _crns(self) -> list[str]:
+        if self._instances is None:
+            account, token = self._auth()
+            self._instances = resolve_instances(account, self._http, token)
+        return self._instances
 
     def statuses(self) -> list[BackendStatus]:
-        service = self._get_service()
-        return self._call("status request", lambda: [_status(b) for b in service.backends()])
+        seen: dict[str, BackendStatus] = {}
+        for crn in self._crns():
+            data = self._get(crn, "/backends")
+            for item in _devices(data):
+                status = parse_backend_item(item)
+                if status.name in seen:
+                    continue
+                seen[status.name] = status
+                self._backend_instance[status.name] = crn
+                if isinstance(item.get("qubits"), int):
+                    self._num_qubits[status.name] = item["qubits"]
+        return list(seen.values())
 
     def calibration(self, backend: str) -> Calibration | None:
-        service = self._get_service()
+        if backend not in self._backend_instance:
+            self.statuses()
+        crn = self._backend_instance.get(backend)
+        if crn is None:
+            raise ProviderError(f"backend {backend!r} is not available to this account")
+        data = self._get(crn, f"/backends/{quote(backend, safe='')}/properties")
+        if not isinstance(data, dict) or not data.get("last_update_date"):
+            return None  # simulators and some new devices report no calibration
+        data["backend_name"] = backend
+        return parse_calibration(data, backend)
 
-        def fetch() -> Calibration | None:
-            properties = service.backend(backend).properties(refresh=True)
-            return None if properties is None else parse_calibration(properties.to_dict(), backend)
+    def backends(self) -> list[BackendSummary]:
+        summaries = []
+        for status in self.statuses():
+            cal = self.calibration(status.name)
+            summaries.append(summarize(status, self._num_qubits.get(status.name), cal))
+        return summaries
 
-        return self._call(f"calibration request for {backend}", fetch)
+
+def _devices(data: Any) -> list[dict[str, Any]]:
+    devices = data.get("devices", []) if isinstance(data, dict) else data
+    if not isinstance(devices, list):
+        raise ProviderError("IBM Quantum backend list has an unexpected format")
+    return [d for d in devices if isinstance(d, dict) and d.get("name")]
 
 
-def summarize(backend: Any) -> BackendSummary:
-    """Build a summary from an ``IBMBackend`` (or a fake backend in tests)."""
-    status = _status(backend)
-    properties = backend.properties()
-    cal = None if properties is None else parse_calibration(properties.to_dict())
+def parse_backend_item(item: dict[str, Any]) -> BackendStatus:
+    """One entry of ``GET /backends``: name, status, queue length."""
+    raw = item.get("status")
+    if isinstance(raw, dict):
+        state = str(raw.get("name", ""))
+        reason = str(raw.get("reason") or "")
+    else:
+        state, reason = str(raw or ""), ""
+    queue = item.get("queue_length")
+    return BackendStatus(
+        name=str(item["name"]),
+        status=status_from(state, reason),
+        status_message=reason or state,
+        pending_jobs=max(int(queue), 0) if isinstance(queue, int) else 0,
+    )
 
+
+def status_from(state: str, reason: str = "") -> Status:
+    text = f"{state} {reason}".lower()
+    if "maint" in text:
+        return Status.MAINTENANCE
+    if state.lower() in ("online", "active"):
+        return Status.ONLINE
+    return Status.OFFLINE
+
+
+def summarize(
+    status: BackendStatus, num_qubits: int | None, cal: Calibration | None
+) -> BackendSummary:
+    if num_qubits is None:
+        num_qubits = len(cal.qubits) if cal is not None else 0
     return BackendSummary(
         name=status.name,
         status=status.status,
         status_message=status.status_message,
         pending_jobs=status.pending_jobs,
-        num_qubits=int(backend.num_qubits),
+        num_qubits=num_qubits,
         median_2q_error=None if cal is None else median_2q_error(cal),
         median_readout_error=None if cal is None else median_readout_error(cal),
         calibrated_at=None if cal is None else cal.calibrated_at,
     )
-
-
-def _status(backend: Any) -> BackendStatus:
-    status = backend.status()
-    return BackendStatus(
-        name=backend.name,
-        status=status_from(status.operational, status.status_msg),
-        status_message=status.status_msg,
-        pending_jobs=int(status.pending_jobs),
-    )
-
-
-def status_from(operational: bool, message: str) -> Status:
-    if operational and message.lower() == "active":
-        return Status.ONLINE
-    if "maint" in message.lower():
-        return Status.MAINTENANCE
-    return Status.OFFLINE
 
 
 def parse_calibration(data: dict[str, Any], backend: str | None = None) -> Calibration:

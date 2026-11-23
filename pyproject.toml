@@ -27,9 +27,7 @@ classifiers = [
     "Topic :: System :: Monitoring",
     "Typing :: Typed",
 ]
-dependencies = [
-    "qiskit-ibm-runtime>=0.40",
-]
+dependencies = []
 
 [project.urls]
 Source = "https://github.com/maninresearch/qutop"
@@ -75,10 +73,6 @@ python_version = "3.11"
 strict = true
 files = ["src", "tests"]
 mypy_path = "tests"
-
-[[tool.mypy.overrides]]
-module = ["qiskit.*", "qiskit_ibm_runtime.*"]
-ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["qutop.ui.*"]

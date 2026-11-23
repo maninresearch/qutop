@@ -2,21 +2,28 @@
 
 from __future__ import annotations
 
+import gzip
+import json
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from functools import cache
+from pathlib import Path
 from typing import Any
 
 from qutop.providers.base import BackendStatus, BackendSummary, Calibration, Status
 from qutop.providers.ibm import parse_calibration
 
+FIXTURES = Path(__file__).parent / "fixtures"
+
 
 @cache
-def kingston_properties() -> dict[str, Any]:
-    """Real calibration data shipped with qiskit-ibm-runtime's fake provider."""
-    from qiskit_ibm_runtime.fake_provider import FakeKingston
+def _kingston_json() -> bytes:
+    return gzip.decompress((FIXTURES / "ibm" / "kingston_properties.json.gz").read_bytes())
 
-    data: dict[str, Any] = FakeKingston().properties().to_dict()
+
+def kingston_properties() -> dict[str, Any]:
+    """Real ibm_kingston calibration (see fixtures/README.md). A fresh copy each call."""
+    data: dict[str, Any] = json.loads(_kingston_json())
     return data
 
 
@@ -76,3 +83,64 @@ class StubProvider:
 
 def online(name: str, queue: int = 0) -> BackendStatus:
     return BackendStatus(name, Status.ONLINE, "active", queue)
+
+
+class FakeTransport:
+    """Answers HTTP requests from a routing table; records what was asked."""
+
+    def __init__(self, routes: dict[tuple[str, str], Any] | None = None) -> None:
+        from qutop.providers.http import Request, Response
+
+        self.Request = Request
+        self.Response = Response
+        self.routes: dict[tuple[str, str], Any] = routes or {}
+        self.requests: list[Any] = []
+
+    def __call__(self, request: Any, timeout: float) -> Any:
+        self.requests.append(request)
+        path = request.url.split("?")[0]
+        answer = self.routes.get((request.method, path))
+        if answer is None:
+            return self.Response(404, {}, b'{"message": "not found"}')
+        if callable(answer):
+            answer = answer(request)
+        if isinstance(answer, self.Response):
+            return answer
+        return self.Response(200, {}, json.dumps(answer).encode())
+
+
+CRN = "crn:v1:bluemix:public:quantum-computing:us-east:a/abc123:inst-1::"
+API = "https://quantum.cloud.ibm.com/api/v1"
+IAM = "https://iam.cloud.ibm.com/identity/token"
+SEARCH = "https://api.global-search-tagging.cloud.ibm.com/v3/resources/search"
+
+
+def ibm_routes(
+    overrides: dict[tuple[str, str], Any] | None = None,
+) -> dict[tuple[str, str], Any]:
+    """A small IBM Quantum account: kingston online, torino in maintenance."""
+    props = kingston_properties()
+    routes: dict[tuple[str, str], Any] = {
+        ("POST", IAM): {"access_token": "iam-token", "expires_in": 3600},
+        ("POST", SEARCH): {"items": [{"name": "my-instance", "crn": CRN}]},
+        ("GET", f"{API}/backends"): {
+            "devices": [
+                {
+                    "name": "ibm_kingston",
+                    "qubits": 156,
+                    "queue_length": 12,
+                    "status": {"name": "online"},
+                },
+                {
+                    "name": "ibm_torino",
+                    "qubits": 133,
+                    "queue_length": 0,
+                    "status": {"name": "offline", "reason": "maintenance"},
+                },
+            ]
+        },
+        ("GET", f"{API}/backends/ibm_kingston/properties"): props,
+        ("GET", f"{API}/backends/ibm_torino/properties"): {},
+    }
+    routes.update(overrides or {})
+    return routes

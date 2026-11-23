@@ -14,15 +14,20 @@ dashboard is not built yet, and commands and options may still change.
 
     pipx install qutop
 
-Version 0.0.x still depends on `qiskit-ibm-runtime`, which makes the install
-large (about 250 MB). Later versions talk to the IBM Quantum API directly and
-have no dependencies.
+qutop has no dependencies beyond Python 3.11 or newer. It talks to the IBM
+Quantum API directly; Qiskit is not needed to run it.
 
 ## Usage
 
-qutop reads the IBM Quantum account you saved with Qiskit:
+qutop uses the IBM Quantum account saved by Qiskit in
+`~/.qiskit/qiskit-ibm.json`, picking the same default account Qiskit would
+(`--account NAME` picks another). If you have never saved one:
 
-    python -c "from qiskit_ibm_runtime import QiskitRuntimeService; QiskitRuntimeService.save_account(token='...', set_as_default=True)"
+    python -c "from qiskit_ibm_runtime import QiskitRuntimeService; QiskitRuntimeService.save_account(token='...', instance='...', set_as_default=True)"
+
+or set `QISKIT_IBM_TOKEN` (your IBM Cloud API key) and `QISKIT_IBM_INSTANCE`
+(the instance CRN or name). qutop only reads these; it never stores or prints
+credentials.
 
 Then:
 

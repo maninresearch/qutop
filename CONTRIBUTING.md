@@ -17,8 +17,12 @@ All of these run in CI and must pass before a change is merged:
     uv run mypy
     uv run pytest
 
-Tests run offline and need no IBM Quantum account. Provider tests use the
-backend snapshots that ship with `qiskit_ibm_runtime.fake_provider`.
+Tests run offline and need no IBM Quantum account. Provider tests answer
+HTTP requests from a fake transport; real calibration data used as input is
+in `tests/fixtures/` (see its README for where it came from).
+
+qutop has no runtime dependencies. Please keep it that way: use the standard
+library, and discuss in an issue first if something truly needs a package.
 
 ## Changes
 

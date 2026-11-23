@@ -6,6 +6,20 @@ All notable changes to qutop are listed here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- qutop no longer depends on `qiskit-ibm-runtime` or anything else outside the
+  Python standard library. It calls the IBM Quantum REST API directly, so the
+  install drops from about 250 MB to under 100 kB and startup from seconds to
+  under a tenth of a second. Saved Qiskit accounts and the `QISKIT_IBM_*`
+  environment variables still work.
+- The status of every backend now comes from one request instead of one per
+  backend.
+
+### Added
+
+- `--account NAME` selects a saved IBM Quantum account other than the default.
+
 ## [0.0.1] - 2026-11-23
 
 First preview release.
