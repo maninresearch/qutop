@@ -30,3 +30,21 @@ backend snapshots that ship with `qiskit_ibm_runtime.fake_provider`.
   written for users rather than copied from commit messages.
 - Only `src/qutop/providers/` may talk to the network. Everything else takes
   plain data so it can be tested offline.
+
+## Releases
+
+Every push to `main` publishes a dev build to TestPyPI once CI passes:
+
+    pipx install --index-url https://test.pypi.org/simple/ \
+        --pip-args="--extra-index-url https://pypi.org/simple" qutop
+
+To release a version:
+
+1. Rename `[Unreleased]` in `CHANGELOG.md` to `[X.Y.Z] - YYYY-MM-DD` and add
+   a new empty `[Unreleased]` above it.
+2. Commit as `release: vX.Y.Z` and push to `main`.
+3. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+
+The tag publishes to PyPI (after approval in the `pypi` environment) and
+creates a GitHub Release with that changelog section as its notes. The
+version comes from the tag; there is no version number to edit.
