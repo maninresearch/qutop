@@ -6,6 +6,10 @@ All notable changes to qutop are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.0.1] - 2026-11-23
+
+First preview release.
+
 ### Added
 
 - `qutop list` prints every IBM Quantum backend your account can see: status,
@@ -15,3 +19,6 @@ All notable changes to qutop are listed here. The format follows
   local SQLite database, so drift can be studied later. Each calibration is
   kept in full alongside per-qubit T1, T2, readout and `sx` error and
   per-pair two-qubit gate error. `--once` polls a single time and exits.
+
+[Unreleased]: https://github.com/maninresearch/qutop/compare/v0.0.1...HEAD
+[0.0.1]: https://github.com/maninresearch/qutop/releases/tag/v0.0.1

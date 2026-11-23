@@ -7,14 +7,16 @@ how each qubit is calibrated today, and where your own jobs are. In the
 background it keeps a local history of calibration snapshots, so you can see
 how a device drifts over days and weeks.
 
-**Status:** early development. Nothing is released yet and the interface will
-change.
+**Status:** early preview. `qutop list` and `qutop collect` work; the live
+dashboard is not built yet, and commands and options may still change.
 
 ## Install
 
-Not on PyPI yet. Once released:
-
     pipx install qutop
+
+Version 0.0.x still depends on `qiskit-ibm-runtime`, which makes the install
+large (about 250 MB). Later versions talk to the IBM Quantum API directly and
+have no dependencies.
 
 ## Usage
 
