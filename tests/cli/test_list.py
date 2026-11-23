@@ -7,6 +7,7 @@ import pytest
 from qutop import __version__
 from qutop.cli import EXIT_ERROR, EXIT_NOT_CONFIGURED, EXIT_OK, main
 from qutop.providers.base import BackendSummary, NotConfiguredError, ProviderError, Status
+from stubs import StubProvider
 
 NOW = datetime(2026, 11, 20, 12, 0, tzinfo=UTC)
 
@@ -22,18 +23,6 @@ def summary(name: str, status: Status, queue: int, cal_hours: float) -> BackendS
         median_readout_error=0.011,
         calibrated_at=NOW - timedelta(hours=cal_hours),
     )
-
-
-class StubProvider:
-    name = "stub"
-
-    def __init__(self, result: list[BackendSummary] | Exception) -> None:
-        self.result = result
-
-    def backends(self) -> list[BackendSummary]:
-        if isinstance(self.result, Exception):
-            raise self.result
-        return list(self.result)
 
 
 def run(argv: list[str], provider: StubProvider) -> tuple[int, str, str]:

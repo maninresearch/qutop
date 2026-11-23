@@ -74,6 +74,7 @@ ban-relative-imports = "all"
 python_version = "3.11"
 strict = true
 files = ["src", "tests"]
+mypy_path = "tests"
 
 [[tool.mypy.overrides]]
 module = ["qiskit.*", "qiskit_ibm_runtime.*"]
@@ -85,8 +86,10 @@ strict = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["tests"]
 addopts = ["-ra", "--strict-markers", "--strict-config"]
 xfail_strict = true
+filterwarnings = ["error"]
 
 [tool.coverage.run]
 source = ["qutop"]
